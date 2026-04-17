@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import google.generativeai as genai
+import time  #
 
 # ==========================================
 # 1. 初始化設定與 API 鑰匙
@@ -68,16 +69,32 @@ if user_query:
             {user_query}
             """
 
-            # 步驟 C：呼叫 Gemini 產生回答
-            try:
-                response = model.generate_content(prompt)
-                
-                # 步驟 D：將結果顯示給使用者
-                st.success("✨ AI 智能回覆：")
-                st.markdown(response.text)
-                
-            except Exception as e:
-                st.error(f"連線發生錯誤，請確認您的電腦有網路，且 API Key 設定正確。錯誤詳情：{e}")
+            # 步驟 C：呼叫 AI (加入自動重試保護機制)
+            max_retries = 3      # 最多重試 3 次
+            retry_delay = 2      # 每次重試前等待 2 秒
+            
+            for attempt in range(max_retries):
+                try:
+                    response = model.generate_content(prompt)
+                    
+                    # 步驟 D：將結果顯示給使用者
+                    st.success("✨ AI 智能回覆：")
+                    st.markdown(response.text)
+                    break  # 成功就跳出重試迴圈
+                    
+                except Exception as e:
+                    error_message = str(e)
+                    
+                    # 判斷是否為 429 免費額度用罄錯誤
+                    if "429" in error_message or "Quota" in error_message:
+                        if attempt < max_retries - 1:
+                            st.warning(f"⏳ 系統提示：目前 AI 免費連線額度暫時用罄。程式正在為您等待 2 秒後進行自動重試 (第 {attempt + 1} 次)，請稍候...")
+                            time.sleep(retry_delay)
+                        else:
+                            st.error("❌ 抱歉，目前 AI 免費連線額度已暫時用罄。建議您等待約 1~2 分鐘後再重新發問，或先洽詢人事處承辦人員。")
+                    else:
+                        st.error(f"連線發生其他錯誤，請確認系統狀態。錯誤詳情：{e}")
+                        break
 
 # ==========================================
 # 5. 側邊欄：顯示系統狀態
