@@ -12,7 +12,7 @@ GOOGLE_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GOOGLE_API_KEY)
 
 # 選擇 Gemini 模型 (使用 latest 確保抓到最新支援的版本，避免 404 錯誤)
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-3-flash-preview')
 
 # ==========================================
 # 2. 讀取法規資料庫 (真實讀取 Excel 版)
