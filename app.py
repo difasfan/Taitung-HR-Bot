@@ -6,7 +6,7 @@ import time
 # ==========================================
 # 1. 初始化設定與 API 鑰匙
 # ==========================================
-st.set_page_config(page_title="臺東縣府差勤小助手 (聊天室版)", page_icon="💬")
+st.set_page_config(page_title="臺東縣府差勤小助手 (智能對話版)", page_icon="💬")
 
 try:
     GOOGLE_API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -16,7 +16,7 @@ except Exception as e:
 
 genai.configure(api_key=GOOGLE_API_KEY)
 
-# 【自訂模型備援名單】
+# 【自訂模型備援名單】確保系統穩定不當機
 MODEL_LIST = [
     "gemini-2.5-flash",
     "gemini-2.0-flash",
@@ -43,13 +43,11 @@ df = load_data()
 # ==========================================
 # 3. 聊天室「記憶卡」初始化
 # ==========================================
-# 如果網頁剛打開，還沒有記憶，就幫它建一個空的記憶清單
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    # 放入第一句歡迎詞
     st.session_state.messages.append({
         "role": "assistant", 
-        "content": "您好！我是臺東縣府差勤小助手👋 \n請隨時問我差勤相關問題，或是延續我們剛剛的話題喔！"
+        "content": "您好！我是臺東縣府差勤小助手👋 \n請隨時問我差勤相關問題，我會根據最新法規為您解答！"
     })
 
 # ==========================================
@@ -59,13 +57,12 @@ with st.sidebar:
     st.header("⚙️ 系統設定與資訊")
     st.write(f"📚 已收錄法規：{len(df)} 條")
     
-    # 增加一個「清除對話」的按鈕
     if st.button("🗑️ 清除對話紀錄 (開啟新話題)"):
         st.session_state.messages = []
-        st.rerun() # 重新整理網頁
+        st.rerun()
 
 st.title("💬 臺東縣府差勤小助手")
-st.caption("支援連續對話記憶與多模型自動備援")
+st.caption("支援連續對話記憶與嚴謹計算邏輯")
 st.divider()
 
 # ==========================================
@@ -78,33 +75,40 @@ for msg in st.session_state.messages:
 # ==========================================
 # 6. 接收新問題與 AI 處理邏輯
 # ==========================================
-# st.chat_input 是底部的對話輸入框
 if user_query := st.chat_input("請輸入您的問題，例如：請問喪假規定..."):
     
-    # A. 把同仁的新問題顯示在畫面上，並存入記憶卡
+    # 顯示同仁的新問題並存入記憶卡
     with st.chat_message("user"):
         st.markdown(user_query)
     st.session_state.messages.append({"role": "user", "content": user_query})
 
-    # B. 準備打包給 AI 的法規資料
     if df.empty:
         st.error("請先準備 rules.xlsx 檔案。")
     else:
+        # 準備法規資料
         all_rules_text = ""
         for _, row in df.iterrows():
             all_rules_text += f"【法規】：{row['Source']} / 【規定】：{row['Answer']}\n"
             
-        # 整理最近的「歷史對話」給 AI 看 (取最近 6 句，避免塞太多廢話)
+        # 整理最近的歷史對話 (取最近 6 句)
         history_context = ""
-        recent_messages = st.session_state.messages[-7:-1] # 排除剛剛輸入的最新問題
+        recent_messages = st.session_state.messages[-7:-1] 
         for m in recent_messages:
             speaker = "同仁" if m["role"] == "user" else "小助手"
             history_context += f"{speaker}：{m['content']}\n"
 
-        # C. 撰寫終極考卷 (Prompt)
+        # ==========================================
+        # 👑 核心防呆考卷 (加入反問機制)
+        # ==========================================
         prompt = f"""
         你是一位專業、親切的臺東縣政府人事處客服人員。
-        請「僅根據」以下提供的【法規資料】來回答問題。若法規中找不到答案，請回答：「抱歉，目前的法規資料庫未包含此規定，建議您洽詢人事室。」
+        請遵守以下兩大原則來回答問題：
+        
+        1. 【法規依據】：請「僅根據」以下提供的【法規資料】來回答問題。若法規中找不到答案，請回答：「抱歉，目前的法規資料庫未包含此規定，建議您洽詢人事室。」絕對不可自己編造法規。
+        
+        2. 【精準計算與反問機制】（非常重要）：如果同仁的問題涉及到天數或金額的「比例計算」（例如：按比例計算隔年休假天數、計算年資等），請你務必先檢查【歷史對話紀錄】與【同仁的最新問題】中，是否已經提供了計算必備的變數（例如：「到職月份日期」或「確切年資」）。
+        👉 如果「缺少」這些必備條件，請你「務必先禮貌地反問同仁」以取得確切的月份或日期。
+        👉 絕對「不可以」自己假設一個數字（例如假設對方做滿整年、預設12個月、或假設某個日期）來計算。
         
         【法規資料】：
         {all_rules_text}
@@ -116,9 +120,9 @@ if user_query := st.chat_input("請輸入您的問題，例如：請問喪假規
         {user_query}
         """
 
-        # D. 呼叫 AI 並顯示回覆 (含多模型備援)
+        # 呼叫 AI 並顯示回覆 (多模型備援)
         with st.chat_message("assistant"):
-            message_placeholder = st.empty() # 建立一個空位來放回答或警告
+            message_placeholder = st.empty() 
             message_placeholder.markdown("🤖 思考中...")
             
             success = False
@@ -127,10 +131,7 @@ if user_query := st.chat_input("請輸入您的問題，例如：請問喪假規
                     current_model = genai.GenerativeModel(model_name)
                     response = current_model.generate_content(prompt)
                     
-                    # 成功取得回答，顯示出來
                     message_placeholder.markdown(response.text)
-                    
-                    # 將 AI 的回答存入記憶卡
                     st.session_state.messages.append({"role": "assistant", "content": response.text})
                     success = True
                     break 
